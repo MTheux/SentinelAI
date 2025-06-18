@@ -1,0 +1,19 @@
+# Arquivos de ambiente e chaves sensíveis
+.env
+
+# Pastas e arquivos gerados automaticamente pelo Python
+__pycache__/
+*.pyc
+
+# Pastas de resultados de scans e logs (geralmente não versionadas)
+scan_results/
+*.log
+
+# Executáveis e binários de ferramentas que não devem ser versionados
+ReconTools/*.exe
+ReconTools/*.zip
+ReconTools/*.tar.gz
+ReconTools/*.rar
+ReconTools/nuclei # O executável pode não ter extensão em Linux/macOS
+ReconTools/httpx
+ReconTools/katana
