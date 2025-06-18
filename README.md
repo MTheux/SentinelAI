@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # SentinelAI: Plataforma de Pentest Inteligente com LLMs
 
 **README.md**
