@@ -224,7 +224,7 @@ def parse_vulnerability_summary(text_response):
     parsed_content = []
 
     for i, line in enumerate(lines):
-        if ("Total de Vulnerabilidades:" in line or "Total de Ameaças:" in line or "Total de Vulnerabilidades API:" in line or "Total de Insights:" in line or "Total de Eventos:" in line) and not summary_line_found:
+        if ("Total de Vulnerabilidades:" in line or "Total de Ameaças:" in line or "Total de Vulnerabilidades API:" in line or "Total de Insights:" in line or "Total de Eventos:" in line or "Total de Achados:" in line) and not summary_line_found:
             summary_line = line
             summary_line_found = True
         else:
@@ -234,7 +234,7 @@ def parse_vulnerability_summary(text_response):
         parts = summary_line.split('|')
         for part in parts:
             part = part.strip()
-            if "Total de Vulnerabilidades:" in part or "Total de Ameaças:" in part or "Total de Vulnerabilidades API:" in part or "Total de Insights:" in part or "Total de Eventos:" in part:
+            if "Total de Vulnerabilidades:" in part or "Total de Ameaças:" in part or "Total de Vulnerabilidades API:" in part or "Total de Insights:" in part or "Total de Eventos:" in part or "Total de Achados:" in part:
                 try:
                     summary["Total"] = int(part.split(':')[1].strip())
                 except ValueError: pass
@@ -1025,7 +1025,7 @@ def poc_generator_html_page(llm_model_vision, llm_model_text):
         if st.session_state.poc_gen_payload_example:
             st.markdown("#### Exemplo de Payload/Comando para Teste")
             payload_lang = "plaintext"
-            first_line = st.session_state.poc_gen_payload_example.splitlines()[0].strip() if st.session_state.poc_gen_payload_example else ""
+            first_line = st.session_state.poc_gen_payload_example.splitlines()[0].strip() if st.session_state.poc_payload_example else ""
 
             if "alert(" in st.session_state.poc_gen_payload_example.lower() or "document.write" in st.session_state.poc_gen_payload_example.lower():
                 payload_lang = "js"
@@ -1252,6 +1252,7 @@ def swagger_openapi_analyzer_page(llm_model_vision, llm_model_text):
 EXPLOITDB_ROOT = os.path.join(os.path.dirname(__file__), "ExploitDB")
 EXPLOITS_DIR = os.path.join(EXPLOITDB_ROOT, "exploits")
 SHELLCODES_DIR = os.path.join(EXPLOITDB_ROOT, "shellcodes")
+os.makedirs(EXPLOITDB_ROOT, exist_ok=True) # Garantir que a pasta raiz exista
 os.makedirs(EXPLOITS_DIR, exist_ok=True)
 os.makedirs(SHELLCODES_DIR, exist_ok=True)
 
@@ -1316,7 +1317,40 @@ def searchsploit_exploit_page(llm_model_text):
 
             with st.spinner(f"Buscando por '{st.session_state.searchsploit_query}' no Exploit-DB local..."):
                 results = []
+                # Buscar em exploits
                 for root, _, files in os.walk(EXPLOITS_DIR):
+                    for file in files:
+                        full_path = os.path.join(root, file)
+                        relative_path = os.path.relpath(full_path, EXPLOITDB_ROOT)
+
+                        file_content_sample = ""
+                        try:
+                            # Ler as primeiras linhas para um título ou contexto
+                            with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                head_lines = [f.readline() for _ in range(10)]
+                                file_content_sample = "".join(head_lines).lower()
+                                if head_lines and len(head_lines[0].strip()) < 200:
+                                    exploit_title = head_lines[0].strip()
+                                else:
+                                    exploit_title = os.path.basename(file)
+                        except Exception:
+                            exploit_title = os.path.basename(file)
+
+                        # Check se o termo de busca está no nome do arquivo, caminho relativo ou amostra do conteúdo
+                        if search_pattern.search(file.lower()) or \
+                           search_pattern.search(relative_path.lower()) or \
+                           search_pattern.search(file_content_sample):
+                            
+                            # Adicionar apenas se ainda não estiver nos resultados (evitar duplicatas)
+                            if {"title": exploit_title, "path": relative_path, "full_path": full_path} not in results:
+                                results.append({
+                                    "title": exploit_title,
+                                    "path": relative_path,
+                                    "full_path": full_path
+                                })
+                
+                # Buscar em shellcodes (opcional, pode ser removido se não quiser shellcodes na busca)
+                for root, _, files in os.walk(SHELLCODES_DIR):
                     for file in files:
                         full_path = os.path.join(root, file)
                         relative_path = os.path.relpath(full_path, EXPLOITDB_ROOT)
@@ -1343,7 +1377,8 @@ def searchsploit_exploit_page(llm_model_text):
                                     "path": relative_path,
                                     "full_path": full_path
                                 })
-                
+
+
                 if results:
                     st.session_state.searchsploit_results = sorted(results, key=lambda x: x['path'])
                     st.session_state.selected_exploit_index = 0
@@ -1425,7 +1460,7 @@ def searchsploit_exploit_page(llm_model_text):
                         f"## 6. Informações a Coletar Após a Execução Bem-Sucedida\n"
                         f"Se o exploit for bem-sucedido, que tipo de informações ou evidências o pentester deve procurar para confirmar a exploração e documentar a falha? (Ex: acesso a shell, arquivos de configuração, credenciais, informações de sistema, listagem de diretórios, dados de banco de dados, etc.).\n\n"
                         f"## 7. Observações Éticas e de Segurança\n"
-                        f"É absolutamente crucial obter AUTORIZAÇÃO explícita por escrito do proprietário do sistema antes de executar este ou qualquer outro exploit. Executar este exploit sem autorização é ilegal e pode resultar em consequências graves. Além disso, a execução inadequada pode causar instabilidade ou interrupção do serviço alvo, por isso, realize testes apenas em ambientes controlados e autorizados, com backups adequados." # Contexto legal mantido
+                        f"É absolutamente crucial obter AUTORIZAÇÃO explícita por escrito do proprietário do sistema antes de executar este ou qualquer outro exploit. Executar este exploit sem autorização é ilegal e pode resultar em consequências legais graves. Além disso, a execução inadequada pode causar instabilidade ou interrupção do serviço alvo, por isso, realize testes apenas em ambientes controlados e autorizados, com backups adequados." # Contexto legal mantido
                     )
                     llm_analysis_raw = obter_resposta_llm(llm_model_text, [llm_exploit_prompt])
 
@@ -2404,52 +2439,92 @@ def intelligent_log_analyzer_page(llm_model_text):
 
 # --- NOVAS PÁGINAS DE INTEGRAÇÃO COM RAPID7 (Validacao e Exploracao) ---
 
-def get_insightvm_vulnerabilities(target_ips, llm_text_model):
+def get_insightvm_vulnerabilities(target_identifiers, llm_text_model):
     """
     Função para buscar vulnerabilidades no Rapid7 InsightVM via API.
-    ATENÇÃO: ESTE É UM CÓDIGO MOCK/EXEMPLO. VOCÊ PRECISA SUBSTITUÍ-LO
-    PELA LÓGICA REAL DE INTERAÇÃO COM A API DO RAPID7 INSIGHTVM.
-    Isso envolve:
-    1. Autenticação (obtendo um token de sessão).
-    2. Buscando IDs de ativos pelos IPs/Nomes de Host fornecidos.
-    3. Para cada ativo, buscando as vulnerabilidades associadas.
+    ATENÇÃO: ESTE É UM CÓDIGO PLACEHOLDER. VOCÊ PRECISA IMPLEMENTAR A LÓGICA REAL
+    DE INTERAÇÃO COM A API DO RAPID7 INSIGHTVM.
+
+    Isso geralmente envolve:
+    1. Autenticação (obtendo um token de sessão, se necessário, ou usando X-Api-Key diretamente).
+    2. Buscando IDs de ativos pelos IPs/Nomes de Host fornecidos (usando /api/3/assets/search).
+    3. Para cada ativo, buscando as vulnerabilidades associadas (usando /api/3/assets/{asset_id}/vulnerabilities).
     4. Tratamento de paginação, erros e limites de taxa.
 
     Documentação da API: https://help.rapid7.com/insightvm/en-us/api/v3/docs.html
     """
     if not RAPID7_INSIGHTVM_API_KEY:
-        return {"error": "RAPID7_INSIGHTVM_API_KEY não configurada no .env. Configure para usar esta funcionalidade."}
+        st.error("ERRO: A variável de ambiente 'RAPID7_INSIGHTVM_API_KEY' não está configurada no .env. Configure para usar esta funcionalidade.")
+        return {"error": "RAPID7_INSIGHTVM_API_KEY não configurada."}
 
-    # URL base da API do InsightVM
-    api_url = RAPID7_INSIGHTVM_URL + "/api/3"
+    api_base_url = RAPID7_API_BASE_URLS.get(RAPID7_INSIGHTVM_REGION.lower(), RAPID7_API_BASE_URLS["us"])
     headers = {
-        "X-Api-Key": RAPID7_INSIGHTVM_API_KEY,
+        "X-Api-Key": RAPID7_INSIGHTVM_API_KEY, # Sua chave de API
         "Content-Type": "application/json",
         "Accept": "application/json;charset=UTF-8"
     }
 
-    st.warning("Aviso: A integração com a API do Rapid7 InsightVM é um MOCK (simulação) neste código. Você precisa implementar a lógica real da API para buscar as vulnerabilidades.")
-    st.info(f"Tentando usar a URL base: {RAPID7_INSIGHTVM_URL}")
+    all_vulns_by_identifier = {} # Para armazenar vulnerabilidades por IP/hostname fornecido pelo usuário
 
-    # --- LÓGICA MOCK (SIMULAÇÃO) ---
-    mock_vulnerabilities = {}
-    for ip in target_ips:
-        if ip == "192.168.1.10":
-            mock_vulnerabilities[ip] = [
-                {"id": "VULN-1234", "title": "SQL Injection (Login Page)", "severity": "CRITICAL", "cvss_score": 9.8, "description": "High-severity SQL injection vulnerability found on /login.php, parameter 'username'. Affects web application on port 80.", "solution": "Use prepared statements.", "cve": "CVE-2023-1234"},
-                {"id": "VULN-5678", "title": "SMB Remote Code Execution (EternalBlue)", "severity": "CRITICAL", "cvss_score": 8.1, "description": "Vulnerable SMB service detected. Allows remote code execution. Affected port 445.", "solution": "Apply patch MS17-010.", "cve": "CVE-2017-0144"},
-                {"id": "VULN-9101", "title": "Outdated Apache Web Server", "severity": "MEDIUM", "cvss_score": 6.5, "description": "Apache HTTP Server version 2.4.38 detected, which has multiple known vulnerabilities. Affected port 80.", "solution": "Upgrade Apache to latest stable version.", "cve": "CVE-2022-5678"},
-            ]
-        elif ip == "192.168.1.20":
-            mock_vulnerabilities[ip] = [
-                {"id": "VULN-1122", "title": "Cross-Site Scripting (XSS) Reflected", "severity": "HIGH", "cvss_score": 7.2, "description": "Reflected XSS found on /search?q= parameter. Affects web application on port 80.", "solution": "Implement output encoding.", "cve": "CVE-2021-9876"},
-            ]
+    # Loop através de cada IP/Hostname que o usuário digitou
+    for identifier in target_identifiers:
+        st.info(f"Buscando ativo e vulnerabilidades no Rapid7 InsightVM para: {identifier}")
+        asset_id = None
+        
+        # Determine se é um IP ou hostname para usar o filtro correto na API
+        search_field = "ip-address"
+        if not re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", identifier): # Não parece um IP, assume hostname
+            search_field = "host-name"
+        
+        # Payload para buscar o ativo
+        search_payload = {
+            "filters": [
+                {"field": search_field, "operator": "IN", "values": [identifier]}
+            ],
+            "match": "ANY" 
+        }
+
+        try:
+            # 1. Busca o ID do Ativo (Asset ID) no Rapid7 InsightVM
+            # Este é um POST para /api/3/assets/search
+            asset_search_url = f"{api_base_url}/api/3/assets/search"
+            asset_response = requests.post(asset_search_url, headers=headers, json=search_payload)
+            asset_response.raise_for_status() # Lança exceção para erros HTTP (4xx ou 5xx)
+
+            assets_found = asset_response.json().get('resources', [])
+            
+            if assets_found:
+                # Pega o primeiro ativo encontrado, ou itera se houver múltiplos
+                asset_id = assets_found[0].get('id') 
+                st.success(f"Ativo '{identifier}' encontrado no InsightVM com ID: {asset_id}")
+            else:
+                st.warning(f"Ativo '{identifier}' NÃO ENCONTRADO no InsightVM. Verifique o IP/Nome ou se o ativo foi varrido.")
+                all_vulns_by_identifier[identifier] = [] # Nenhuma vulnerabilidade se o ativo não for encontrado
+                continue # Pula para o próximo identificador
+
+        except requests.exceptions.RequestException as e:
+            st.error(f"Erro na API do Rapid7 InsightVM ao buscar ativo '{identifier}': {e}. Verifique sua chave de API e região.")
+            all_vulns_by_identifier[identifier] = []
+            continue # Pula para o próximo identificador
+
+        # 2. Se o Asset ID foi encontrado, busca as vulnerabilidades para esse Asset ID
+        if asset_id:
+            try:
+                vulns_url = f"{api_base_url}/api/3/assets/{asset_id}/vulnerabilities"
+                vulns_response = requests.get(vulns_url, headers=headers)
+                vulns_response.raise_for_status()
+
+                asset_vulns = vulns_response.json().get('resources', [])
+                all_vulns_by_identifier[identifier] = asset_vulns
+                st.success(f"Encontradas {len(asset_vulns)} vulnerabilidades para o ativo {identifier}.")
+
+            except requests.exceptions.RequestException as e:
+                st.error(f"Erro na API do Rapid7 InsightVM ao buscar vulnerabilidades para ativo ID {asset_id} ('{identifier}'): {e}")
+                all_vulns_by_identifier[identifier] = []
         else:
-            mock_vulnerabilities[ip] = [] # Nenhum achado para outros IPs
-    
-    time.sleep(2) # Simula um atraso da API
+            all_vulns_by_identifier[identifier] = [] # Se o asset_id não foi encontrado, não há vulns para ele
 
-    return mock_vulnerabilities
+    return all_vulns_by_identifier
 
 
 def rapid7_vulnerability_validation_page(llm_model_text):
@@ -2477,7 +2552,7 @@ def rapid7_vulnerability_validation_page(llm_model_text):
     target_ips_input = st.text_area(
         "IPs ou Nomes de Host (separados por vírgula ou nova linha):",
         value=st.session_state.rapid7_target_ips,
-        placeholder="Ex: 192.168.1.10, 192.168.1.20, meu-servidor.com",
+        placeholder="Ex: 10.0.0.10, 10.0.0.20, meu-servidor-prod.com",
         height=100,
         key="rapid7_target_ips_input"
     )
@@ -2495,9 +2570,10 @@ def rapid7_vulnerability_validation_page(llm_model_text):
             st.session_state.rapid7_validation_summary = None
             return
 
-        target_list = [ip.strip() for ip in st.session_state.rapid7_target_ips.replace('\n', ',').split(',') if ip.strip()]
+        target_list = [id.strip() for id in st.session_state.rapid7_target_ips.replace('\n', ',').split(',') if id.strip()]
 
         with st.spinner("Consultando Rapid7 InsightVM e buscando exploits locais..."):
+            # Chama a função que agora tentará a integração real
             insightvm_data = get_insightvm_vulnerabilities(target_list, llm_model_text)
 
             if "error" in insightvm_data:
@@ -2513,7 +2589,7 @@ def rapid7_vulnerability_validation_page(llm_model_text):
             medium_vulns = 0
             low_vulns = 0
 
-            for ip, vulns in insightvm_data.items():
+            for identifier, vulns in insightvm_data.items():
                 for vuln in vulns:
                     total_vulns += 1
                     severity = vuln.get('severity', '').upper()
@@ -2528,14 +2604,14 @@ def rapid7_vulnerability_validation_page(llm_model_text):
 
                     # Formato para o LLM
                     all_vulnerabilities_for_llm.append(
-                        f"IP: {ip}, Título: {vuln.get('title')}, CVE: {vuln.get('cve', 'N/A')}, "
+                        f"Ativo: {identifier}, Título: {vuln.get('title')}, CVE: {vuln.get('cve', 'N/A')}, "
                         f"Severidade: {vuln.get('severity')}, CVSS: {vuln.get('cvss_score')}, "
                         f"Descrição: {vuln.get('description')}"
                     )
 
             if not all_vulnerabilities_for_llm:
-                st.info(f"Nenhuma vulnerabilidade encontrada no Rapid7 InsightVM para os IPs: {', '.join(target_list)}.")
-                st.session_state.rapid7_validation_results = "Nenhuma vulnerabilidade relevante encontrada."
+                st.info(f"Nenhuma vulnerabilidade encontrada no Rapid7 InsightVM para os identificadores: {', '.join(target_list)}. Ou a API não retornou dados.")
+                st.session_state.rapid7_validation_results = "Nenhuma vulnerabilidade relevante encontrada ou erro na comunicação com a API."
                 st.session_state.rapid7_validation_summary = {"Total": 0, "Críticas": 0, "Altas": 0, "Médias": 0, "Baixas": 0}
                 return
 
@@ -2546,11 +2622,11 @@ def rapid7_vulnerability_validation_page(llm_model_text):
                 f"Para cada vulnerabilidade, faça o seguinte:\n\n"
                 f"**RESUMO:** Forneça um resumo quantitativo na PRIMEIRA LINHA da sua resposta, no formato exato: `Total de Achados: {total_vulns} | Críticos: {critical_vulns} | Altos: {high_vulns} | Médios: {medium_vulns} | Baixos: {low_vulns}`.\n\n"
                 f"Para cada achado, forneça:\n"
-                f"## Vulnerabilidade: [Título da Vulnerabilidade] (IP: [IP Alvo])\n"
+                f"## Vulnerabilidade: [Título da Vulnerabilidade] (Ativo: [IP/Hostname Alvo])\n"
                 f"**CVE:** [CVE ID, se disponível, ex: CVE-YYYY-NNNNN]\n"
                 f"**Severidade Rapid7:** [Severidade original do Rapid7, ex: CRITICAL, HIGH]\n"
                 f"**Descrição Detalhada:** Explique a vulnerabilidade e como ela se manifesta no contexto do ativo.\n"
-                f"**Busca no Exploit-DB Local & Correlação (simulada/inferida):** Indique se há exploits públicos ou PoCs prováveis no Exploit-DB local para esta vulnerabilidade (com base em CVE, título ou descrição). Mencione o tipo de exploit esperado (ex: RCE, LFI, Credential Disclosure).\n"
+                f"**Busca no Exploit-DB Local & Correlação:** Tente correlacionar a vulnerabilidade com PoCs ou exploits conhecidos no seu repositório local do Exploit-DB (ou que seriam típicos do Metasploit). Mencione o tipo de exploit esperado (ex: RCE, LFI, Credential Disclosure).\n"
                 f"**Passos para Validação/Exploração & Ferramentas:** Forneça um guia passo a passo sobre como um pentester validaria ou tentaria explorar essa vulnerabilidade. Inclua comandos de exemplo (Metasploit, curl, nmap, etc.) com placeholders (`<IP_ALVO>`, `<PORTA_ALVO>`). Se houver um exploit específico que faria sentido, mencione-o.\n"
                 f"**Exemplo de Comando/PoC:** Forneça um bloco de código `bash`, `python`, `http` ou `msfconsole` com um exemplo de PoC ou comando de exploração, adaptado para o IP e detalhes da vulnerabilidade.\n"
                 f"**Dicas de Contorno/Considerações:** Qualquer observação sobre WAF, IDS/IPS, ou como a exploração pode ser sutil.\n"
@@ -2676,14 +2752,7 @@ if 'rapid7_target_ips' not in st.session_state: st.session_state.rapid7_target_i
 if 'rapid7_validation_results' not in st.session_state: st.session_state.rapid7_validation_results = ""
 if 'rapid7_validation_summary' not in st.session_state: st.session_state.rapid7_validation_summary = None
 
-# Variáveis de estado para Enhanced Remediation Advisor - REMOVIDAS
-# if 'remediation_vuln_input' not in st.session_state: st.session_state.remediation_vuln_input = ""
-# if 'remediation_asset_criticality' not in st.session_state: st.session_state.remediation_asset_criticality = "Média"
-# if 'remediation_exploit_known' not in st.session_state: st.session_state.remediation_exploit_known = False
-# if 'remediation_output' not in st.session_state: st.session_state.remediation_output = ""
-
-
-# AQUI ESTÁ A LISTA DE NAVEGAÇÃO COMPLETA NA BARRA LATERAL (Enhanced Remediation Advisor REMOVIDO)
+# AQUI ESTÁ A LISTA DE NAVEGAÇÃO COMPLETA NA BARRA LATERAL
 selected_page = st.sidebar.radio(
     "Navegação",
     [
@@ -2699,7 +2768,7 @@ selected_page = st.sidebar.radio(
         "Tactical Command Orchestrator",
         "Pentest Playbook Generator",
         "Intelligent Log Analyzer",
-        "Rapid7 Vulnerability Validation" # Página "Enhanced Remediation Advisor" removida
+        "Rapid7 Vulnerability Validation"
     ],
     index=0 
 )
@@ -2731,4 +2800,3 @@ elif selected_page == "Intelligent Log Analyzer":
     intelligent_log_analyzer_page(llm_model_text)
 elif selected_page == "Rapid7 Vulnerability Validation":
     rapid7_vulnerability_validation_page(llm_model_text)
-# A chamada para enhanced_remediation_advisor_page foi removida
