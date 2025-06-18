@@ -1,0 +1,2 @@
+sieb-web1.testphp.vulnweb.com
+www.testphp.vulnweb.com

@@ -1,0 +1,14 @@
+<<<<<<< HEAD
+streamlit
+google-generativeai
+python-dotenv
+pyyaml
+pillow
+=======
+streamlit
+google-generativeai
+python-dotenv
+pyyaml
+pillow
+>>>>>>> d952da5b7f7b2e0742adccf77664452963260a10
+requests

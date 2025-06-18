@@ -1,0 +1,8 @@
+/CVS/Entries          (Status: 200) [Size: 1]
+/CVS/Repository       (Status: 200) [Size: 8]
+/CVS/Root             (Status: 200) [Size: 1]
+/cgi-bin              (Status: 403) [Size: 276]
+/cgi-bin/             (Status: 403) [Size: 276]
+/crossdomain.xml      (Status: 200) [Size: 224]
+/favicon.ico          (Status: 200) [Size: 894]
+/index.php            (Status: 200) [Size: 4958]
